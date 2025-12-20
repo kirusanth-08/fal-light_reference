@@ -54,10 +54,6 @@ RUN pip install websocket-client websockets
 # ComfyUI Custom Nodes
 # ---------------------------------------------------------
 
-# 6. ltdrdata/ComfyUI-Manager
-RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git /comfyui/custom_nodes/ComfyUI-Manager \
-    && cd /comfyui/custom_nodes/ComfyUI-Manager && git checkout de64af4a6873547668187f0e98433a8030880940 \
-    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 # 1. JPS-GER/ComfyUI_JPS-Nodes
 RUN git clone https://github.com/JPS-GER/ComfyUI_JPS-Nodes.git /comfyui/custom_nodes/ComfyUI_JPS-Nodes \
     && cd /comfyui/custom_nodes/ComfyUI_JPS-Nodes && git checkout 0e2a9aca02b17dde91577bfe4b65861df622dcaf \
