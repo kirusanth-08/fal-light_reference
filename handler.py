@@ -96,52 +96,14 @@ def upload_images(images):
 # Input Model (UI)
 # -------------------------------------------------
 class SkinFixInput(BaseModel):
-    skin_preset: Literal[
-        "none",
-        "imperfect_skin",
-        "high_end_skin",
-        "smooth_skin",
-        "portrait",
-        "mid_range",
-        "full_body"
-    ] = Field(title="Skin Preset")
+    image1: Image = Field(title="Input Main Image")
+    image2: Image = Field(title="Input Reference Image")
 
-    image: Image = Field(title="Input Image")
-
-    cfg: float = Field(
-        default=1.0,
-        ge=0.0,
-        le=2.0,
-        title="Skin Realism",
-        description="Ignored when preset selected"
-    )
-
-    # INTEGER SLIDER → mapped internally to 0.30–0.40
-    skin_refinement: int = Field(
-        default=0,
-        ge=0,
-        le=100,
-        title="Skin Refinement",
-        description="Ignored when preset selected"
-    )
-
-    seed: int = Field(
-        default=123456789,
-        title="Random Seed"
-    )
-
-    upscale_resolution: Literal[
-        1024, 1280, 1536, 1792,
-        2048, 2304, 2560, 2816, 3072
-    ] = Field(
-        default=2048,
-        title="Upscaler Resolution"
-    )
 
 # -------------------------------------------------
 # App
 # -------------------------------------------------
-class SkinFixApp(fal.App):
+class LightMigration(fal.App):
     image = custom_image
     machine_type = "GPU-H100"
     max_concurrency = 5
@@ -184,36 +146,19 @@ class SkinFixApp(fal.App):
             workflow = job["input"]["workflow"]
 
             # Upload image
-            image_name = f"input_{uuid.uuid4().hex}.png"
+            main_image = f"input_{uuid.uuid4().hex}.png"
+            reference_image = f"input_{uuid.uuid4().hex}.png"
             upload_images([{
-                "name": image_name,
-                "image": fal_image_to_base64(input.image)
+                "name": main_image,
+                "image": fal_image_to_base64(input.image1)
             }])
-            workflow["32"]["inputs"]["image"] = image_name
+            upload_images([{
+                "name": reference_image,
+                "image": fal_image_to_base64(input.image2)
+            }])
+            workflow["31"]["inputs"]["image"] = main_image
+            workflow["7"]["inputs"]["image"] = reference_image
 
-            sampler = workflow["29"]["inputs"]
-
-            # Preset logic
-            if input.skin_preset != "none":
-                p = PRESETS[input.skin_preset]
-                sampler["cfg"] = p["cfg"]
-                sampler["denoise"] = p["denoise"]
-                workflow["30"]["inputs"]["new_resolution"] = p["resolution"]
-
-                if p.get("prompt_override"):
-                    workflow["26"]["inputs"]["part1"] = p["positive_prompt"]
-                    workflow["25"]["inputs"]["text"] = p["negative_prompt"]
-            else:
-                sampler["cfg"] = input.cfg
-                sampler["denoise"] = 0.30 + (input.skin_refinement / 100.0) * 0.10
-
-            sampler["seed"] = input.seed
-
-            # Auto-random SeedVR2 seed
-            workflow["30"]["inputs"]["seed"] = random.randint(0, 2**32 - 1)
-
-            # Upscaler resolution
-            workflow["31"]["inputs"]["vae_tile_size"] = input.upscale_resolution
 
             # Run ComfyUI
             client_id = str(uuid.uuid4())
