@@ -80,9 +80,6 @@ RUN git clone https://github.com/kijai/ComfyUI-KJNodes.git /comfyui/custom_nodes
     && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
 
-# 7. comfyui_essentials (via pip)
-RUN pip install comfyui-essentials==1.1.0
-
 # ---------------------------------------------------------
 # fal Runtime Requirements
 # ---------------------------------------------------------
