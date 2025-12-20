@@ -51,52 +51,41 @@ RUN pip install requests websocket-client sageattention \
 RUN pip install websocket-client websockets
 
 # ---------------------------------------------------------
-# ComfyUI Custom Nodes - Put custom nodes here
+# ComfyUI Custom Nodes
 # ---------------------------------------------------------
 
-# 1. ComfyRoll Custom Nodes (NO requirements.txt)
-RUN git clone https://github.com/Suzie1/ComfyUI_Comfyroll_CustomNodes.git /comfyui/custom_nodes/ComfyUI_Comfyroll_CustomNodes \
-    && true
+# 1. JPS-GER/ComfyUI_JPS-Nodes
+RUN git clone https://github.com/JPS-GER/ComfyUI_JPS-Nodes.git /comfyui/custom_nodes/ComfyUI_JPS-Nodes \
+    && cd /comfyui/custom_nodes/ComfyUI_JPS-Nodes && git checkout 0e2a9aca02b17dde91577bfe4b65861df622dcaf \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-# 2. ComfyUI Essentials (HAS requirements)
-RUN git clone https://github.com/cubiq/ComfyUI_essentials.git /comfyui/custom_nodes/ComfyUI_essentials \
-    && pip install -r /comfyui/custom_nodes/ComfyUI_essentials/requirements.txt
+# 2. numz/ComfyUI-SeedVR2_VideoUpscaler
+RUN git clone https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler.git /comfyui/custom_nodes/ComfyUI-SeedVR2_VideoUpscaler \
+    && cd /comfyui/custom_nodes/ComfyUI-SeedVR2_VideoUpscaler && git checkout 58bc9e8bc946499352e0cb3a9fe0d0a61fd86791 \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-# 3. comfyui_face_parsing (HAS requirements)
-RUN git clone https://github.com/Ryuukeisyou/comfyui_face_parsing.git /comfyui/custom_nodes/comfyui_face_parsing \
-    && pip install -r /comfyui/custom_nodes/comfyui_face_parsing/requirements.txt
+# 3. MadiatorLabs/ComfyUI-RunpodDirect
+RUN git clone https://github.com/MadiatorLabs/ComfyUI-RunpodDirect.git /comfyui/custom_nodes/ComfyUI-RunpodDirect \
+    && cd /comfyui/custom_nodes/ComfyUI-RunpodDirect && git checkout f7cc02cccb499e0170d8040d1788bf44598e2709 \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-# 4. ComfyUI LayerStyle Advance (HAS requirements)
-RUN git clone https://github.com/chflame163/ComfyUI_LayerStyle_Advance.git /comfyui/custom_nodes/ComfyUI_LayerStyle_Advance \
-    && pip install -r /comfyui/custom_nodes/ComfyUI_LayerStyle_Advance/requirements.txt
+# 4. MoonGoblinDev/Civicomfy
+RUN git clone https://github.com/MoonGoblinDev/Civicomfy.git /comfyui/custom_nodes/Civicomfy \
+    && cd /comfyui/custom_nodes/Civicomfy && git checkout 1fcd88d571a871cb29f15fa5b67bbf014339b1a6 \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-# 5. comfyui-custom-scripts (NO requirements)
-RUN git clone https://github.com/pythongosssss/ComfyUI-Custom-Scripts.git /comfyui/custom_nodes/ComfyUI-Custom-Scripts \
-    && true
-
-# 6. ComfyUI Florence2 (HAS requirements)
-RUN git clone https://github.com/kijai/ComfyUI-Florence2.git /comfyui/custom_nodes/ComfyUI-Florence2 \
-    && pip install -r /comfyui/custom_nodes/ComfyUI-Florence2/requirements.txt
-
-# 7. ComfyUI KJNodes (HAS requirements)
+# 5. kijai/ComfyUI-KJNodes
 RUN git clone https://github.com/kijai/ComfyUI-KJNodes.git /comfyui/custom_nodes/ComfyUI-KJNodes \
-    && pip install -r /comfyui/custom_nodes/ComfyUI-KJNodes/requirements.txt
+    && cd /comfyui/custom_nodes/ComfyUI-KJNodes && git checkout 62a862db37d77a9a2e7611f638f9ff151a24fdec \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-# 8. ComfyUI Post-Processing Nodes (NO requirements)
-RUN git clone https://github.com/EllangoK/ComfyUI-post-processing-nodes.git /comfyui/custom_nodes/ComfyUI-post-processing-nodes \
-    && true
+# 6. ltdrdata/ComfyUI-Manager
+RUN git clone https://github.com/ltdrdata/ComfyUI-Manager.git /comfyui/custom_nodes/ComfyUI-Manager \
+    && cd /comfyui/custom_nodes/ComfyUI-Manager && git checkout de64af4a6873547668187f0e98433a8030880940 \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-# 9. Masquerade Nodes (NO requirements)
-RUN git clone https://github.com/BadCafeCode/masquerade-nodes-comfyui.git /comfyui/custom_nodes/masquerade-nodes-comfyui \
-    && true
-
-# 10. rgthree – Power Lora Loader (HAS requirements)
-RUN git clone https://github.com/rgthree/rgthree-comfy.git /comfyui/custom_nodes/rgthree-comfy \
-    && pip install -r /comfyui/custom_nodes/rgthree-comfy/requirements.txt
-
-# 11. SeedVR2 Upscaler – alex-node-final (HAS requirements)
-RUN git clone https://github.com/shangeethAlex/alex-node-final.git /comfyui/custom_nodes/ComfyUI-SeedVR2 \
-    && pip install -r /comfyui/custom_nodes/ComfyUI-SeedVR2/requirements.txt
+# 7. comfyui_essentials (via pip)
+RUN pip install comfyui-essentials==1.1.0
 
 # ---------------------------------------------------------
 # fal Runtime Requirements
