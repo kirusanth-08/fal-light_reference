@@ -275,7 +275,7 @@ WORKFLOW_JSON={
           "model": "seedvr2_ema_7b_fp16.safetensors",
           "device": "cuda:0",
           "blocks_to_swap": 32,
-          "swap_io_components": true,
+          "swap_io_components": True,
           "offload_device": "cpu",
           "cache_model": "sdpa",
           "attention_mode": "sdpa"
@@ -289,15 +289,15 @@ WORKFLOW_JSON={
         "inputs": {
           "model": "ema_vae_fp16.safetensors",
           "device": "cuda:0",
-          "encode_tiled": true,
+          "encode_tiled": True,
           "encode_tile_size": 1024,
           "encode_tile_overlap": 128,
-          "decode_tiled": true,
+          "decode_tiled": True,
           "decode_tile_size": 1024,
           "decode_tile_overlap": 128,
-          "tile_debug": "false",
+          "tile_debug": "False",
           "offload_device": "cpu",
-          "cache_model": false
+          "cache_model": False
         },
         "class_type": "SeedVR2LoadVAEModel",
         "_meta": {
@@ -327,14 +327,14 @@ WORKFLOW_JSON={
           ],
           "max_resolution": 4096,
           "batch_size": 5,
-          "uniform_batch_size": false,
+          "uniform_batch_size": False,
           "color_correction": "lab",
           "temporal_overlap": 0,
           "prepend_frames": 0,
           "input_noise_scale": 0,
           "latent_noise_scale": 0,
           "offload_device": "cpu",
-          "enable_debug": false,
+          "enable_debug": False,
           "image": [
             "84",
             0
