@@ -146,8 +146,8 @@ class LightMigration(fal.App):
             workflow = job["input"]["workflow"]
 
             # Upload image
-            main_image = f"input_{uuid.uuid4().hex}.png"
-            reference_image = f"input_{uuid.uuid4().hex}.png"
+            main_image = f"input1_{uuid.uuid4().hex}.png"
+            reference_image = f"input2_{uuid.uuid4().hex}.png"
             upload_images([{
                 "name": main_image,
                 "image": fal_image_to_base64(input.image1)
