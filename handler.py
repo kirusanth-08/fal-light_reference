@@ -29,28 +29,28 @@ COMFY_HOST = "127.0.0.1:8188"
 # -------------------------------------------------
 # Presets
 # -------------------------------------------------
-PRESETS = {
-    "imperfect_skin": {"cfg": 0.1, "denoise": 0.34, "resolution": 2048},
-    "high_end_skin": {"cfg": 1.1, "denoise": 0.30, "resolution": 3072},
-    "smooth_skin": {
-        "cfg": 1.1,
-        "denoise": 0.30,
-        "resolution": 2048,
-        "prompt_override": True,
-        "positive_prompt": (
-            "ultra realistic portrait of [subject], flawless clear face, "
-            "smooth radiant skin texture, fine pores, balanced complexion, "
-            "healthy glow, cinematic lighting"
-        ),
-        "negative_prompt": (
-            "freckles, spots, blemishes, acne, pigmentation, redness, "
-            "rough skin, waxy skin, plastic texture, airbrushed"
-        )
-    },
-    "portrait": {"cfg": 0.5, "denoise": 0.35, "resolution": 2048},
-    "mid_range": {"cfg": 1.4, "denoise": 0.40, "resolution": 2048},
-    "full_body": {"cfg": 1.5, "denoise": 0.30, "resolution": 2048},
-}
+# PRESETS = {
+#     "imperfect_skin": {"cfg": 0.1, "denoise": 0.34, "resolution": 2048},
+#     "high_end_skin": {"cfg": 1.1, "denoise": 0.30, "resolution": 3072},
+#     "smooth_skin": {
+#         "cfg": 1.1,
+#         "denoise": 0.30,
+#         "resolution": 2048,
+#         "prompt_override": True,
+#         "positive_prompt": (
+#             "ultra realistic portrait of [subject], flawless clear face, "
+#             "smooth radiant skin texture, fine pores, balanced complexion, "
+#             "healthy glow, cinematic lighting"
+#         ),
+#         "negative_prompt": (
+#             "freckles, spots, blemishes, acne, pigmentation, redness, "
+#             "rough skin, waxy skin, plastic texture, airbrushed"
+#         )
+#     },
+#     "portrait": {"cfg": 0.5, "denoise": 0.35, "resolution": 2048},
+#     "mid_range": {"cfg": 1.4, "denoise": 0.40, "resolution": 2048},
+#     "full_body": {"cfg": 1.5, "denoise": 0.30, "resolution": 2048},
+# }
 
 # -------------------------------------------------
 # Utilities
@@ -95,7 +95,7 @@ def upload_images(images):
 # -------------------------------------------------
 # Input Model (UI)
 # -------------------------------------------------
-class SkinFixInput(BaseModel):
+class LightMigrationInput(BaseModel):
     image1: Image = Field(title="Input Main Image")
     image2: Image = Field(title="Input Reference Image")
 
@@ -140,7 +140,7 @@ class LightMigration(fal.App):
             raise RuntimeError("ComfyUI failed to start")
 
     @fal.endpoint("/")
-    def handler(self, input: SkinFixInput):
+    def handler(self, input: LightMigrationInput):
         try:
             job = copy.deepcopy(WORKFLOW_JSON)
             workflow = job["input"]["workflow"]
