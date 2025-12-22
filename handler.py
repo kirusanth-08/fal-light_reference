@@ -316,14 +316,19 @@ class LightMigration(fal.App):
                     print(f"[OUTPUT] Image size: {len(r.content)} bytes")
                     
                     print(f"[OUTPUT] Converting to fal Image object...")
-                    # Use cdn repository to avoid authentication issues
-                    fal_image = Image.from_bytes(
-                        r.content, 
-                        format="png",
-                        repository="cdn"  # Use CDN instead of fal_v3
-                    )
-                    print(f"[OUTPUT] ✓ Image converted, URL: {fal_image.url[:80]}...")
-                    outputs.append(fal_image)
+                    try:
+                        fal_image = Image.from_bytes(
+                            r.content, 
+                            format="png",
+                            repository="cdn"
+                        )
+                        print(f"[OUTPUT] ✓ Image converted successfully")
+                        print(f"[OUTPUT] ✓ Image URL: {fal_image.url[:80]}...")
+                        outputs.append(fal_image)
+                    except Exception as img_error:
+                        print(f"[ERROR] Failed to convert image: {type(img_error).__name__}: {str(img_error)}")
+                        traceback.print_exc()
+                        raise
 
             ws.close()
             print(f"[WEBSOCKET] ✓ Closed")
