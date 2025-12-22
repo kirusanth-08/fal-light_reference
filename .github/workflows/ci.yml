@@ -39,26 +39,6 @@ jobs:
         run: flake8 . --max-line-length=120 --extend-ignore=E501
         continue-on-error: true
 
-  # docker-build:
-  #   name: Docker Build
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v3
-
-  #     - name: Build Docker image
-  #       uses: docker/build-push-action@v5
-  #       with:
-  #         context: .
-  #         file: ./Dockerfile
-  #         push: false
-  #         tags: fal-light-reference:${{ github.sha }}
-  #         cache-from: type=gha
-  #         cache-to: type=gha,mode=max
-
   deploy:
     name: Deploy to fal
     runs-on: ubuntu-latest
