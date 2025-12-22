@@ -14,6 +14,7 @@ from io import BytesIO
 
 from pydantic import BaseModel, Field
 from fal.toolkit.image import Image
+from fal.toolkit import FAL_PERSISTENT_DIR
 
 from comfy_models import MODEL_LIST
 from workflow import WORKFLOW_JSON
