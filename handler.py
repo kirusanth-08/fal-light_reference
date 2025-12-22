@@ -11,6 +11,7 @@ import traceback
 import os
 import copy
 import random
+import tempfile
 from io import BytesIO
 from PIL import Image as PILImage
 from pydantic import BaseModel, Field
@@ -197,7 +198,11 @@ class LightMigration(fal.App):
                         f"&type={img['type']}"
                     )
                     r = requests.get(f"http://{COMFY_HOST}/view?{params}")
-                    images.append(Image.from_bytes(r.content, format="png"))
+                    # Save to temp file and use Image.from_path for better compatibility
+                    temp_path = f"/tmp/output_{uuid.uuid4().hex}.png"
+                    with open(temp_path, "wb") as f:
+                        f.write(r.content)
+                    images.append(Image.from_path(temp_path))
 
             ws.close()
             return {"status": "success", "images": images}
