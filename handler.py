@@ -96,8 +96,10 @@ def upload_images(images):
 # Input Model (UI)
 # -------------------------------------------------
 class LightMigrationInput(BaseModel):
-    image1: Image = Field(title="Input Main Image")
-    image2: Image = Field(title="Input Reference Image")
+    image1: Image = Field(description="Input Main Image")
+    image2: Image = Field(description="Input Reference Image")
+    
+    model_config = {"extra": "allow"}
 
 
 # -------------------------------------------------
@@ -140,8 +142,16 @@ class LightMigration(fal.App):
             raise RuntimeError("ComfyUI failed to start")
 
     @fal.endpoint("/")
-    def handler(self, input: LightMigrationInput):
+    def handler(self, request: LightMigrationInput) -> dict:
         try:
+            # Debug: Print request type and content
+            print(f"Request type: {type(request)}")
+            print(f"Request: {request}")
+            
+            # Handle case where request might be a dict
+            if isinstance(request, dict):
+                request = LightMigrationInput(**request)
+            
             job = copy.deepcopy(WORKFLOW_JSON)
             workflow = job["input"]["workflow"]
 
@@ -150,11 +160,11 @@ class LightMigration(fal.App):
             reference_image = f"input2_{uuid.uuid4().hex}.png"
             upload_images([{
                 "name": main_image,
-                "image": fal_image_to_base64(input.image1)
+                "image": fal_image_to_base64(request.image1)
             }])
             upload_images([{
                 "name": reference_image,
-                "image": fal_image_to_base64(input.image2)
+                "image": fal_image_to_base64(request.image2)
             }])
             workflow["31"]["inputs"]["image"] = main_image
             workflow["7"]["inputs"]["image"] = reference_image
