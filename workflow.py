@@ -3,6 +3,7 @@ WORKFLOW_JSON={
     "uid": "testUid",
     "customNodes": [],
     "customModels": [],
+    "images": [],
     "workflow": { 
       "1": {
         "inputs": {

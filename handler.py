@@ -154,36 +154,61 @@ class LightMigration(fal.App):
     @fal.endpoint("/")
     def handler(self, input: LightMigrationInput):
         try:
+            print("="*80)
             print("[REQUEST] New request received")
+            print(f"[INPUT] Main image URL: {input.main_image_url[:100]}...")
+            print(f"[INPUT] Reference image URL: {input.reference_image_url[:100]}...")
+            print("="*80)
 
+            print("[WORKFLOW] Copying workflow template")
             job = copy.deepcopy(WORKFLOW_JSON)
             workflow = job["input"]["workflow"]
+            print(f"[WORKFLOW] Template has {len(workflow)} nodes")
 
             seed_value = random.randint(0, 2**63 - 1)
             print(f"[SEED] Using seed {seed_value}")
 
             main_img = f"main_{uuid.uuid4().hex}.png"
             ref_img = f"ref_{uuid.uuid4().hex}.png"
+            print(f"[IMAGE] Main image filename: {main_img}")
+            print(f"[IMAGE] Reference image filename: {ref_img}")
 
+            print(f"[DOWNLOAD] Downloading main image from URL...")
             upload_image_url(input.main_image_url, main_img)
+            print("[UPLOAD] ✓ Main image uploaded to ComfyUI")
+            
+            print(f"[DOWNLOAD] Downloading reference image from URL...")
             upload_image_url(input.reference_image_url, ref_img)
+            print("[UPLOAD] ✓ Reference image uploaded to ComfyUI")
 
             # Inject images into workflow (KEEP YOUR NODE IDs)
+            print(f"[WORKFLOW] Injecting images into workflow nodes")
             workflow["31"]["inputs"]["image"] = main_img
             workflow["7"]["inputs"]["image"] = ref_img
+            print(f"[WORKFLOW] ✓ Node 31 image: {workflow['31']['inputs']['image']}")
+            print(f"[WORKFLOW] ✓ Node 7 image: {workflow['7']['inputs']['image']}")
 
+            print(f"[WORKFLOW] Applying fixed values (cfg={FIXED_CFG}, denoise={FIXED_DENOISE}, resolution={FIXED_RESOLUTION})")
             apply_fixed_values(workflow, seed_value)
+            print(f"[WORKFLOW] ✓ Fixed values applied")
 
             # Run ComfyUI
+            print("[COMFY] Initializing ComfyUI execution")
             client_id = str(uuid.uuid4())
+            print(f"[COMFY] Client ID: {client_id}")
+            
+            print(f"[WEBSOCKET] Connecting to ws://{COMFY_HOST}/ws?clientId={client_id}")
             ws = websocket.WebSocket()
             ws.connect(f"ws://{COMFY_HOST}/ws?clientId={client_id}")
+            print(f"[WEBSOCKET] ✓ Connected")
 
+            print(f"[COMFY] Submitting workflow to ComfyUI...")
             resp = requests.post(
                 f"http://{COMFY_HOST}/prompt",
                 json={"prompt": workflow, "client_id": client_id},
                 timeout=30
             )
+            print(f"[COMFY] Response status: {resp.status_code}")
 
             if resp.status_code != 200:
                 print("[ERROR] ComfyUI rejected workflow")
@@ -191,33 +216,70 @@ class LightMigration(fal.App):
                 return {"error": resp.text}
 
             prompt_id = resp.json()["prompt_id"]
-            print(f"[COMFY] Prompt queued: {prompt_id}")
+            print(f"[COMFY] ✓ Prompt queued with ID: {prompt_id}")
 
+            print(f"[EXECUTION] Waiting for workflow to complete...")
+            message_count = 0
             while True:
                 msg = json.loads(ws.recv())
-                if msg.get("type") == "executing" and msg["data"]["node"] is None:
-                    break
+                message_count += 1
+                
+                # Log progress messages
+                if msg.get("type") == "executing":
+                    node = msg["data"].get("node")
+                    if node is None:
+                        print(f"[EXECUTION] ✓ Workflow completed (received {message_count} messages)")
+                        break
+                    else:
+                        print(f"[EXECUTION] Processing node: {node}")
+                elif msg.get("type") == "progress":
+                    value = msg["data"].get("value", 0)
+                    max_val = msg["data"].get("max", 100)
+                    print(f"[PROGRESS] {value}/{max_val}")
 
+            print(f"[HISTORY] Fetching execution history...")
             history = requests.get(
                 f"http://{COMFY_HOST}/history/{prompt_id}"
             ).json()
+            print(f"[HISTORY] ✓ History retrieved")
 
+            print(f"[OUTPUT] Processing output images...")
             outputs = []
-            for node in history[prompt_id]["outputs"].values():
-                for img in node.get("images", []):
+            node_count = 0
+            for node_id, node in history[prompt_id]["outputs"].items():
+                node_count += 1
+                images_in_node = node.get("images", [])
+                print(f"[OUTPUT] Node {node_id}: {len(images_in_node)} image(s)")
+                
+                for idx, img in enumerate(images_in_node):
+                    filename = img['filename']
+                    print(f"[OUTPUT] Fetching image {idx+1}: {filename}")
                     params = (
-                        f"filename={img['filename']}"
+                        f"filename={filename}"
                         f"&subfolder={img.get('subfolder','')}"
                         f"&type={img['type']}"
                     )
                     r = requests.get(f"http://{COMFY_HOST}/view?{params}")
-                    outputs.append(Image.from_bytes(r.content, format="png"))
+                    print(f"[OUTPUT] Image size: {len(r.content)} bytes")
+                    
+                    print(f"[OUTPUT] Converting to fal Image object...")
+                    fal_image = Image.from_bytes(r.content, format="png")
+                    print(f"[OUTPUT] ✓ Image converted, URL: {fal_image.url[:80]}...")
+                    outputs.append(fal_image)
 
             ws.close()
-            print("[SUCCESS] Workflow completed")
+            print(f"[WEBSOCKET] ✓ Closed")
+            print("="*80)
+            print(f"[SUCCESS] ✓ Workflow completed successfully! Generated {len(outputs)} image(s)")
+            print("="*80)
 
             return {"status": "success", "images": outputs}
 
         except Exception as e:
+            print("="*80)
+            print(f"[ERROR] ✗ Exception occurred: {type(e).__name__}")
+            print(f"[ERROR] Message: {str(e)}")
+            print("[ERROR] Full traceback:")
             traceback.print_exc()
+            print("="*80)
             return {"error": str(e)}
