@@ -123,18 +123,58 @@ class LightMigration(fal.App):
 
     def setup(self):
         print("[SETUP] Starting setup")
+        print("="*80)
+
+        # Check persistent storage
+        print(f"[STORAGE] FAL_PERSISTENT_DIR: {FAL_PERSISTENT_DIR}")
+        if os.path.exists(FAL_PERSISTENT_DIR):
+            print(f"[STORAGE] ✓ Persistent directory exists")
+            data_models_dir = os.path.join(FAL_PERSISTENT_DIR, "models")
+            if os.path.exists(data_models_dir):
+                print(f"[STORAGE] ✓ Models directory exists: {data_models_dir}")
+                # List subdirectories
+                for subdir in os.listdir(data_models_dir):
+                    subdir_path = os.path.join(data_models_dir, subdir)
+                    if os.path.isdir(subdir_path):
+                        files = os.listdir(subdir_path)
+                        print(f"[STORAGE]   - {subdir}/: {len(files)} file(s)")
+                        for f in files[:3]:  # Show first 3 files
+                            print(f"[STORAGE]     • {f}")
+            else:
+                print(f"[STORAGE] ✗ Models directory does not exist yet")
+        else:
+            print(f"[STORAGE] ✗ Persistent directory does not exist")
+
+        print("="*80)
+        print("[MODELS] Starting model download and setup")
 
         # Download models
-        for model in MODEL_LIST:
+        for idx, model in enumerate(MODEL_LIST, 1):
+            print(f"[MODEL {idx}/{len(MODEL_LIST)}] Checking: {os.path.basename(model['path'])}")
+            if os.path.exists(model["path"]):
+                file_size = os.path.getsize(model["path"]) / (1024**3)  # GB
+                print(f"[MODEL {idx}/{len(MODEL_LIST)}] ✓ Already exists ({file_size:.2f} GB)")
+            else:
+                print(f"[MODEL {idx}/{len(MODEL_LIST)}] ✗ Not found, downloading from {model['url'][:80]}...")
             download_if_missing(model["url"], model["path"])
 
+        print("="*80)
+        print("[SYMLINK] Creating symlinks to ComfyUI models directory")
+
         # Symlink models
-        for model in MODEL_LIST:
+        for idx, model in enumerate(MODEL_LIST, 1):
             ensure_dir(model["target"])
             if not os.path.exists(model["target"]):
                 os.symlink(model["path"], model["target"])
-                print(f"[MODEL] Linked {model['target']}")
+                print(f"[SYMLINK {idx}/{len(MODEL_LIST)}] ✓ Linked {os.path.basename(model['target'])}")
+            else:
+                print(f"[SYMLINK {idx}/{len(MODEL_LIST)}] ✓ Already linked: {os.path.basename(model['target'])}")
 
+        print("="*80)
+        print("[COMFY] Starting ComfyUI server")
+
+        print("="*80)
+        print("[COMFY] Starting ComfyUI server")
         # Start ComfyUI (LOGS VISIBLE)
         import subprocess
         subprocess.Popen(
@@ -146,13 +186,26 @@ class LightMigration(fal.App):
             ]
         )
 
+        print("[COMFY] Waiting for ComfyUI to be ready...")
         if not check_server(f"http://{COMFY_HOST}/system_stats"):
             raise RuntimeError("ComfyUI failed to start")
 
-        print("[SETUP] ComfyUI is ready")
+        print("[COMFY] ✓ ComfyUI is ready and responding")
+        print("="*80)
+        print("[SETUP] ✓ Setup completed successfully")
+        print("="*80)
 
     @fal.endpoint("/")
     def handler(self, input: LightMigrationInput):
+        from fastapi import Request
+        
+        # Get the request context for authentication
+        try:
+            from starlette.requests import Request as StarletteRequest
+            request_context = None  # Will be injected by fal
+        except:
+            request_context = None
+            
         try:
             print("="*80)
             print("[REQUEST] New request received")
@@ -263,7 +316,12 @@ class LightMigration(fal.App):
                     print(f"[OUTPUT] Image size: {len(r.content)} bytes")
                     
                     print(f"[OUTPUT] Converting to fal Image object...")
-                    fal_image = Image.from_bytes(r.content, format="png")
+                    # Use cdn repository to avoid authentication issues
+                    fal_image = Image.from_bytes(
+                        r.content, 
+                        format="png",
+                        repository="cdn"  # Use CDN instead of fal_v3
+                    )
                     print(f"[OUTPUT] ✓ Image converted, URL: {fal_image.url[:80]}...")
                     outputs.append(fal_image)
 
