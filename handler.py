@@ -3,6 +3,7 @@ from fal.container import ContainerImage
 from pathlib import Path
 import json
 import uuid
+import base64
 import requests
 import websocket
 import traceback
@@ -12,7 +13,6 @@ import random
 from io import BytesIO
 
 from pydantic import BaseModel, Field
-from fal.toolkit import download_file, FAL_PERSISTENT_DIR
 from fal.toolkit.image import Image
 
 from comfy_models import MODEL_LIST
@@ -62,24 +62,18 @@ def check_server(url, retries=500, delay=0.1):
         time.sleep(delay)
     return False
 
-def upload_image_bytes(filename: str, blob: bytes):
-    files = {"image": (filename, BytesIO(blob), "image/png")}
-    r = requests.post(f"http://{COMFY_HOST}/upload/image", files=files)
-    r.raise_for_status()
-    print(f"[UPLOAD] Uploaded {filename}")
+def fal_image_to_base64(img: Image) -> str:
+    pil = img.to_pil()
+    buf = BytesIO()
+    pil.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
 
-def download_input_file(url: str) -> str:
-    target_dir = Path(FAL_PERSISTENT_DIR) / "inputs"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        return download_file(url)
-    except TypeError:
-        return download_file(url, target_dir)
-
-def upload_image_url(image_url: str, filename: str):
-    local_path = download_input_file(image_url)
-    with open(local_path, "rb") as f:
-        upload_image_bytes(filename, f.read())
+def upload_images(images):
+    for img in images:
+        blob = base64.b64decode(img["image"])
+        files = {"image": (img["name"], BytesIO(blob), "image/png")}
+        r = requests.post(f"http://{COMFY_HOST}/upload/image", files=files)
+        r.raise_for_status()
 
 def apply_fixed_values(workflow: dict, seed_value: int):
     for node in workflow.values():
@@ -97,13 +91,11 @@ def apply_fixed_values(workflow: dict, seed_value: int):
 # Input Model (ONLY image inputs in UI)
 # -------------------------------------------------
 class LightMigrationInput(BaseModel):
-    main_image_url: str = Field(
+    main_image: Image = Field(
         title="Main Image",
-        ui={"field": "image"},
     )
-    reference_image_url: str = Field(
+    reference_image: Image = Field(
         title="Reference Image",
-        ui={"field": "image"},
     )
 
 # -------------------------------------------------
@@ -197,20 +189,9 @@ class LightMigration(fal.App):
 
     @fal.endpoint("/")
     def handler(self, input: LightMigrationInput):
-        from fastapi import Request
-        
-        # Get the request context for authentication
-        try:
-            from starlette.requests import Request as StarletteRequest
-            request_context = None  # Will be injected by fal
-        except:
-            request_context = None
-            
         try:
             print("="*80)
             print("[REQUEST] New request received")
-            print(f"[INPUT] Main image URL: {input.main_image_url[:100]}...")
-            print(f"[INPUT] Reference image URL: {input.reference_image_url[:100]}...")
             print("="*80)
 
             print("[WORKFLOW] Copying workflow template")
@@ -226,13 +207,12 @@ class LightMigration(fal.App):
             print(f"[IMAGE] Main image filename: {main_img}")
             print(f"[IMAGE] Reference image filename: {ref_img}")
 
-            print(f"[DOWNLOAD] Downloading main image from URL...")
-            upload_image_url(input.main_image_url, main_img)
-            print("[UPLOAD] ✓ Main image uploaded to ComfyUI")
-            
-            print(f"[DOWNLOAD] Downloading reference image from URL...")
-            upload_image_url(input.reference_image_url, ref_img)
-            print("[UPLOAD] ✓ Reference image uploaded to ComfyUI")
+            print(f"[UPLOAD] Converting and uploading images to ComfyUI...")
+            upload_images([
+                {"name": main_img, "image": fal_image_to_base64(input.main_image)},
+                {"name": ref_img, "image": fal_image_to_base64(input.reference_image)}
+            ])
+            print("[UPLOAD] ✓ Images uploaded to ComfyUI")
 
             # Inject images into workflow (KEEP YOUR NODE IDs)
             print(f"[WORKFLOW] Injecting images into workflow nodes")
@@ -316,19 +296,9 @@ class LightMigration(fal.App):
                     print(f"[OUTPUT] Image size: {len(r.content)} bytes")
                     
                     print(f"[OUTPUT] Converting to fal Image object...")
-                    try:
-                        fal_image = Image.from_bytes(
-                            r.content, 
-                            format="png",
-                            repository="cdn"
-                        )
-                        print(f"[OUTPUT] ✓ Image converted successfully")
-                        print(f"[OUTPUT] ✓ Image URL: {fal_image.url[:80]}...")
-                        outputs.append(fal_image)
-                    except Exception as img_error:
-                        print(f"[ERROR] Failed to convert image: {type(img_error).__name__}: {str(img_error)}")
-                        traceback.print_exc()
-                        raise
+                    fal_image = Image.from_bytes(r.content, format="png")
+                    print(f"[OUTPUT] ✓ Image converted successfully")
+                    outputs.append(fal_image)
 
             ws.close()
             print(f"[WEBSOCKET] ✓ Closed")
