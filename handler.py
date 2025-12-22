@@ -30,9 +30,8 @@ COMFY_HOST = "127.0.0.1:8188"
 # -------------------------------------------------
 # Fixed INTERNAL parameters (NOT exposed in UI)
 # -------------------------------------------------
-FIXED_CFG = 1.1
-FIXED_DENOISE = 0.30
-FIXED_RESOLUTION = 2048
+FIXED_CFG = 1.0
+FIXED_DENOISE = 1.0
 
 # -------------------------------------------------
 # Utilities
@@ -91,9 +90,6 @@ def apply_fixed_values(workflow: dict, seed_value: int):
             inputs["cfg"] = FIXED_CFG
             inputs["denoise"] = FIXED_DENOISE
             inputs["seed"] = seed_value
-
-        if "new_resolution" in inputs:
-            inputs["new_resolution"] = FIXED_RESOLUTION
 
 # -------------------------------------------------
 # Input Model (ONLY image inputs in UI)
