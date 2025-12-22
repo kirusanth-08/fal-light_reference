@@ -144,24 +144,19 @@ class LightMigration(fal.App):
         try:
             # Debug: Print request info
             print(f"Request type: {type(request)}")
-            print(f"Request dir: {dir(request)}")
+            print(f"Request: {request}")
             
-            # Try to get images from request
-            if hasattr(request, 'image1'):
-                img1 = request.image1
-            elif hasattr(request, 'dict'):
-                data = request.dict() if callable(request.dict) else request.dict
-                img1 = Image(url=data.get('image1')) if isinstance(data.get('image1'), str) else data.get('image1')
-            else:
-                raise ValueError(f"Cannot find image1 in request. Available attrs: {dir(request)}")
+            # Access images directly - fal should handle the Pydantic parsing
+            img1 = request.image1
+            img2 = request.image2
             
-            if hasattr(request, 'image2'):
-                img2 = request.image2
-            elif hasattr(request, 'dict'):
-                data = request.dict() if callable(request.dict) else request.dict
-                img2 = Image(url=data.get('image2')) if isinstance(data.get('image2'), str) else data.get('image2')
-            else:
-                raise ValueError(f"Cannot find image2 in request. Available attrs: {dir(request)}")
+            print(f"Image1: {img1}, type: {type(img1)}")
+            print(f"Image2: {img2}, type: {type(img2)}")
+            
+            if img1 is None:
+                raise ValueError("image1 is None - please provide a valid image URL or file")
+            if img2 is None:
+                raise ValueError("image2 is None - please provide a valid image URL or file")
             
             job = copy.deepcopy(WORKFLOW_JSON)
             workflow = job["input"]["workflow"]
