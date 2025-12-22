@@ -1,6 +1,7 @@
 import fal
 from fal.container import ContainerImage
 from fal.toolkit.image import Image
+from fal.toolkit import download_file
 from pathlib import Path
 import json
 import uuid
@@ -12,6 +13,7 @@ import os
 import copy
 import random
 from io import BytesIO
+from PIL import Image as PILImage
 from pydantic import BaseModel, Field
 from comfy_models import MODEL_LIST
 from workflow import WORKFLOW_JSON
@@ -65,6 +67,14 @@ def fal_image_to_base64(img: Image) -> str:
     pil.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
 
+def image_url_to_base64(image_url: str) -> str:
+    """Download image from URL and convert to base64."""
+    image_path = download_file(image_url)
+    with PILImage.open(image_path) as pil:
+        buf = BytesIO()
+        pil.save(buf, format="PNG")
+        return base64.b64encode(buf.getvalue()).decode()
+
 def upload_images(images):
     for img in images:
         blob = base64.b64decode(img["image"])
@@ -88,13 +98,13 @@ def apply_fixed_values(workflow: dict, seed_value: int):
 # Input Model (ONLY image inputs in UI)
 # -------------------------------------------------
 class LightMigrationInput(BaseModel):
-    main_image: Image = Field(
-        default=...,
+    main_image_url: str = Field(
         title="Main Image",
+        description="URL of the main image to process.",
     )
-    reference_image: Image = Field(
-        default=...,
+    reference_image_url: str = Field(
         title="Reference Image",
+        description="URL of the reference image for lighting.",
     )
 
 # -------------------------------------------------
@@ -146,8 +156,8 @@ class LightMigration(fal.App):
             ref_img = f"ref_{uuid.uuid4().hex}.png"
 
             upload_images([
-                {"name": main_img, "image": fal_image_to_base64(input.main_image)},
-                {"name": ref_img, "image": fal_image_to_base64(input.reference_image)}
+                {"name": main_img, "image": image_url_to_base64(input.main_image_url)},
+                {"name": ref_img, "image": image_url_to_base64(input.reference_image_url)}
             ])
 
             workflow["31"]["inputs"]["image"] = main_img
