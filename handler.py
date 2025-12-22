@@ -143,42 +143,25 @@ class LightMigration(fal.App):
             raise RuntimeError("ComfyUI failed to start")
 
     @fal.endpoint("/")
-    def handler(self, request: LightMigrationInput) -> dict:
+    def handler(self, request: dict) -> dict:
         try:
-            # Debug: Print model fields
+            # Debug: Print request info
             print(f"Request type: {type(request)}")
-            print(f"Model fields: {request.model_fields if hasattr(request, 'model_fields') else 'N/A'}")
-            print(f"Model dump: {request.model_dump() if hasattr(request, 'model_dump') else request.dict()}")
+            print(f"Request keys: {list(request.keys())}")
             
-            # Access images using model_dump or dict
-            data = request.model_dump() if hasattr(request, 'model_dump') else request.dict()
-            img1 = data.get('image1')
-            img2 = data.get('image2')
+            # Get the workflow from the request
+            workflow_input = request.get("input", {})
+            workflow = workflow_input.get("workflow", {})
             
-            print(f"Image1: {img1}, type: {type(img1)}")
-            print(f"Image2: {img2}, type: {type(img2)}")
+            if not workflow:
+                raise ValueError(f"No workflow found in request. Keys: {list(request.keys())}")
             
-            if img1 is None:
-                raise ValueError(f"image1 is None. Request data: {data}")
-            if img2 is None:
-                raise ValueError(f"image2 is None. Request data: {data}")
+            print(f"Workflow nodes: {list(workflow.keys())[:10]}")  # Print first 10 nodes
             
-            job = copy.deepcopy(WORKFLOW_JSON)
-            workflow = job["input"]["workflow"]
-
-            # Upload image
-            main_image = f"input1_{uuid.uuid4().hex}.png"
-            reference_image = f"input2_{uuid.uuid4().hex}.png"
-            upload_images([{
-                "name": main_image,
-                "image": fal_image_to_base64(img1)
-            }])
-            upload_images([{
-                "name": reference_image,
-                "image": fal_image_to_base64(img2)
-            }])
-            workflow["31"]["inputs"]["image"] = main_image
-            workflow["7"]["inputs"]["image"] = reference_image
+            job = copy.deepcopy(request)
+            
+            # The workflow is already in the request, just use it directly
+            # No need to upload images separately - they should be in the workflow
 
 
             # Run ComfyUI
