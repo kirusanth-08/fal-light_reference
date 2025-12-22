@@ -1,5 +1,6 @@
 import fal
 from fal.container import ContainerImage
+from fal.toolkit.image import Image
 from pathlib import Path
 import json
 import uuid
@@ -11,11 +12,7 @@ import os
 import copy
 import random
 from io import BytesIO
-
 from pydantic import BaseModel, Field
-from fal.toolkit.image import Image
-from fal.toolkit import FAL_PERSISTENT_DIR
-
 from comfy_models import MODEL_LIST
 from workflow import WORKFLOW_JSON
 
@@ -45,7 +42,6 @@ def download_if_missing(url, path):
     if os.path.exists(path):
         return
     ensure_dir(path)
-    print(f"[MODEL] Downloading {url}")
     with requests.get(url, stream=True) as r:
         r.raise_for_status()
         with open(path, "wb") as f:
@@ -58,7 +54,7 @@ def check_server(url, retries=500, delay=0.1):
         try:
             if requests.get(url).status_code == 200:
                 return True
-        except Exception:
+        except:
             pass
         time.sleep(delay)
     return False
@@ -108,212 +104,92 @@ class LightMigration(fal.App):
     max_concurrency = 5
     requirements = ["websockets", "websocket-client"]
 
-    # 🔓 LOGS ENABLED
-    private_logs = False
-    
-    # Track recent requests to detect duplicates
-    _recent_requests = {}
+    # 🔒 CRITICAL
+    private_logs = True
 
     def setup(self):
-        print("[SETUP] Starting setup")
-        print("="*80)
-
-        # Check persistent storage
-        print(f"[STORAGE] FAL_PERSISTENT_DIR: {FAL_PERSISTENT_DIR}")
-        if os.path.exists(FAL_PERSISTENT_DIR):
-            print(f"[STORAGE] ✓ Persistent directory exists")
-            data_models_dir = os.path.join(FAL_PERSISTENT_DIR, "models")
-            if os.path.exists(data_models_dir):
-                print(f"[STORAGE] ✓ Models directory exists: {data_models_dir}")
-                # List subdirectories
-                for subdir in os.listdir(data_models_dir):
-                    subdir_path = os.path.join(data_models_dir, subdir)
-                    if os.path.isdir(subdir_path):
-                        files = os.listdir(subdir_path)
-                        print(f"[STORAGE]   - {subdir}/: {len(files)} file(s)")
-                        for f in files[:3]:  # Show first 3 files
-                            print(f"[STORAGE]     • {f}")
-            else:
-                print(f"[STORAGE] ✗ Models directory does not exist yet")
-        else:
-            print(f"[STORAGE] ✗ Persistent directory does not exist")
-
-        print("="*80)
-        print("[MODELS] Starting model download and setup")
-
         # Download models
-        for idx, model in enumerate(MODEL_LIST, 1):
-            print(f"[MODEL {idx}/{len(MODEL_LIST)}] Checking: {os.path.basename(model['path'])}")
-            if os.path.exists(model["path"]):
-                file_size = os.path.getsize(model["path"]) / (1024**3)  # GB
-                print(f"[MODEL {idx}/{len(MODEL_LIST)}] ✓ Already exists ({file_size:.2f} GB)")
-            else:
-                print(f"[MODEL {idx}/{len(MODEL_LIST)}] ✗ Not found, downloading from {model['url'][:80]}...")
+        for model in MODEL_LIST:
             download_if_missing(model["url"], model["path"])
 
-        print("="*80)
-        print("[SYMLINK] Creating symlinks to ComfyUI models directory")
-
         # Symlink models
-        for idx, model in enumerate(MODEL_LIST, 1):
+        for model in MODEL_LIST:
             ensure_dir(model["target"])
             if not os.path.exists(model["target"]):
                 os.symlink(model["path"], model["target"])
-                print(f"[SYMLINK {idx}/{len(MODEL_LIST)}] ✓ Linked {os.path.basename(model['target'])}")
-            else:
-                print(f"[SYMLINK {idx}/{len(MODEL_LIST)}] ✓ Already linked: {os.path.basename(model['target'])}")
 
-        print("="*80)
-        print("[COMFY] Starting ComfyUI server")
-
-        print("="*80)
-        print("[COMFY] Starting ComfyUI server")
-        # Start ComfyUI (LOGS VISIBLE)
+        # Start ComfyUI (NO --log-stdout)
         import subprocess
-        subprocess.Popen(
+        self.comfy = subprocess.Popen(
             [
                 "python", "-u", "/comfyui/main.py",
                 "--disable-auto-launch",
                 "--disable-metadata",
                 "--listen", "--port", "8188"
-            ]
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
         )
 
-        print("[COMFY] Waiting for ComfyUI to be ready...")
         if not check_server(f"http://{COMFY_HOST}/system_stats"):
             raise RuntimeError("ComfyUI failed to start")
-
-        print("[COMFY] ✓ ComfyUI is ready and responding")
-        print("="*80)
-        print("[SETUP] ✓ Setup completed successfully")
-        print("="*80)
 
     @fal.endpoint("/")
     def handler(self, input: LightMigrationInput):
         try:
-            print("="*80)
-            print("[REQUEST] New request received")
-            print("="*80)
-
-            print("[WORKFLOW] Copying workflow template")
             job = copy.deepcopy(WORKFLOW_JSON)
             workflow = job["input"]["workflow"]
-            print(f"[WORKFLOW] Template has {len(workflow)} nodes")
-
-            seed_value = random.randint(0, 2**63 - 1)
-            print(f"[SEED] Using seed {seed_value}")
 
             main_img = f"main_{uuid.uuid4().hex}.png"
             ref_img = f"ref_{uuid.uuid4().hex}.png"
-            print(f"[IMAGE] Main image filename: {main_img}")
-            print(f"[IMAGE] Reference image filename: {ref_img}")
 
-            print(f"[UPLOAD] Converting and uploading images to ComfyUI...")
             upload_images([
                 {"name": main_img, "image": fal_image_to_base64(input.main_image)},
                 {"name": ref_img, "image": fal_image_to_base64(input.reference_image)}
             ])
-            print("[UPLOAD] ✓ Images uploaded to ComfyUI")
 
-            # Inject images into workflow (KEEP YOUR NODE IDs)
-            print(f"[WORKFLOW] Injecting images into workflow nodes")
             workflow["31"]["inputs"]["image"] = main_img
             workflow["7"]["inputs"]["image"] = ref_img
-            print(f"[WORKFLOW] ✓ Node 31 image: {workflow['31']['inputs']['image']}")
-            print(f"[WORKFLOW] ✓ Node 7 image: {workflow['7']['inputs']['image']}")
 
-            print(f"[WORKFLOW] Applying fixed values (cfg={FIXED_CFG}, denoise={FIXED_DENOISE}, resolution={FIXED_RESOLUTION})")
+            seed_value = random.randint(0, 2**63 - 1)
             apply_fixed_values(workflow, seed_value)
-            print(f"[WORKFLOW] ✓ Fixed values applied")
 
             # Run ComfyUI
-            print("[COMFY] Initializing ComfyUI execution")
             client_id = str(uuid.uuid4())
-            print(f"[COMFY] Client ID: {client_id}")
-            
-            print(f"[WEBSOCKET] Connecting to ws://{COMFY_HOST}/ws?clientId={client_id}")
             ws = websocket.WebSocket()
             ws.connect(f"ws://{COMFY_HOST}/ws?clientId={client_id}")
-            print(f"[WEBSOCKET] ✓ Connected")
 
-            print(f"[COMFY] Submitting workflow to ComfyUI...")
             resp = requests.post(
                 f"http://{COMFY_HOST}/prompt",
                 json={"prompt": workflow, "client_id": client_id},
                 timeout=30
             )
-            print(f"[COMFY] Response status: {resp.status_code}")
-
-            if resp.status_code != 200:
-                print("[ERROR] ComfyUI rejected workflow")
-                print(resp.text)
-                return {"error": resp.text}
-
+            resp.raise_for_status()
             prompt_id = resp.json()["prompt_id"]
-            print(f"[COMFY] ✓ Prompt queued with ID: {prompt_id}")
 
-            print(f"[EXECUTION] Waiting for workflow to complete...")
-            message_count = 0
             while True:
                 msg = json.loads(ws.recv())
-                message_count += 1
-                
-                # Log progress messages
-                if msg.get("type") == "executing":
-                    node = msg["data"].get("node")
-                    if node is None:
-                        print(f"[EXECUTION] ✓ Workflow completed (received {message_count} messages)")
-                        break
-                    else:
-                        print(f"[EXECUTION] Processing node: {node}")
-                elif msg.get("type") == "progress":
-                    value = msg["data"].get("value", 0)
-                    max_val = msg["data"].get("max", 100)
-                    print(f"[PROGRESS] {value}/{max_val}")
+                if msg.get("type") == "executing" and msg["data"]["node"] is None:
+                    break
 
-            print(f"[HISTORY] Fetching execution history...")
             history = requests.get(
                 f"http://{COMFY_HOST}/history/{prompt_id}"
             ).json()
-            print(f"[HISTORY] ✓ History retrieved")
 
-            print(f"[OUTPUT] Processing output images...")
-            outputs = []
-            node_count = 0
-            for node_id, node in history[prompt_id]["outputs"].items():
-                node_count += 1
-                images_in_node = node.get("images", [])
-                print(f"[OUTPUT] Node {node_id}: {len(images_in_node)} image(s)")
-                
-                for idx, img in enumerate(images_in_node):
-                    filename = img['filename']
-                    print(f"[OUTPUT] Fetching image {idx+1}: {filename}")
+            images = []
+            for node in history[prompt_id]["outputs"].values():
+                for img in node.get("images", []):
                     params = (
-                        f"filename={filename}"
+                        f"filename={img['filename']}"
                         f"&subfolder={img.get('subfolder','')}"
                         f"&type={img['type']}"
                     )
                     r = requests.get(f"http://{COMFY_HOST}/view?{params}")
-                    print(f"[OUTPUT] Image size: {len(r.content)} bytes")
-                    
-                    print(f"[OUTPUT] Converting to fal Image object...")
-                    fal_image = Image.from_bytes(r.content, format="png")
-                    print(f"[OUTPUT] ✓ Image converted successfully")
-                    outputs.append(fal_image)
+                    images.append(Image.from_bytes(r.content, format="png"))
 
             ws.close()
-            print(f"[WEBSOCKET] ✓ Closed")
-            print("="*80)
-            print(f"[SUCCESS] ✓ Workflow completed successfully! Generated {len(outputs)} image(s)")
-            print("="*80)
-
-            return {"status": "success", "images": outputs}
+            return {"status": "success", "images": images}
 
         except Exception as e:
-            print("="*80)
-            print(f"[ERROR] ✗ Exception occurred: {type(e).__name__}")
-            print(f"[ERROR] Message: {str(e)}")
-            print("[ERROR] Full traceback:")
             traceback.print_exc()
-            print("="*80)
             return {"error": str(e)}
