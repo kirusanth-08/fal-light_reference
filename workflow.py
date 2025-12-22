@@ -124,7 +124,7 @@ WORKFLOW_JSON={
       },
       "14": {
         "inputs": {
-          "seed": 1053423613535130,
+          "seed": 231401576434555,
           "steps": 8,
           "cfg": 1,
           "sampler_name": "euler",
@@ -177,7 +177,7 @@ WORKFLOW_JSON={
       },
       "31": {
         "inputs": {
-          "image": "istockphoto-1077242420-612x612.jpg"
+          "image": "ComfyUI_00016_.png"
         },
         "class_type": "LoadImage",
         "_meta": {
@@ -296,7 +296,7 @@ WORKFLOW_JSON={
           "decode_tiled": True,
           "decode_tile_size": 1024,
           "decode_tile_overlap": 128,
-          "tile_debug": "False",
+          "tile_debug": "false",
           "offload_device": "cpu",
           "cache_model": False
         },
@@ -321,7 +321,7 @@ WORKFLOW_JSON={
       },
       "85": {
         "inputs": {
-          "seed": 1419136762,
+          "seed": 682371503,
           "resolution": [
             "96",
             0
@@ -354,19 +354,6 @@ WORKFLOW_JSON={
           "title": "SeedVR2 Video Upscaler (v2.5.14)"
         }
       },
-      "87": {
-        "inputs": {
-          "filename_prefix": "ComfyUI",
-          "images": [
-            "85",
-            0
-          ]
-        },
-        "class_type": "SaveImage",
-        "_meta": {
-          "title": "Save Image"
-        }
-      },
       "96": {
         "inputs": {
           "int_a": [
@@ -390,6 +377,19 @@ WORKFLOW_JSON={
         "class_type": "GetImageSize+",
         "_meta": {
           "title": "🔧 Get Image Size"
+        }
+      },
+      "101": {
+        "inputs": {
+          "filename_prefix": "ComfyUI",
+          "images": [
+            "85",
+            0
+          ]
+        },
+        "class_type": "SaveImage",
+        "_meta": {
+          "title": "Save Image"
         }
       }
     }
