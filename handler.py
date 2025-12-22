@@ -98,8 +98,6 @@ def upload_images(images):
 class LightMigrationInput(BaseModel):
     image1: Image = Field(description="Input Main Image")
     image2: Image = Field(description="Input Reference Image")
-    
-    model_config = {"extra": "allow"}
 
 
 # -------------------------------------------------
@@ -144,13 +142,26 @@ class LightMigration(fal.App):
     @fal.endpoint("/")
     def handler(self, request: LightMigrationInput) -> dict:
         try:
-            # Debug: Print request type and content
+            # Debug: Print request info
             print(f"Request type: {type(request)}")
-            print(f"Request: {request}")
+            print(f"Request dir: {dir(request)}")
             
-            # Handle case where request might be a dict
-            if isinstance(request, dict):
-                request = LightMigrationInput(**request)
+            # Try to get images from request
+            if hasattr(request, 'image1'):
+                img1 = request.image1
+            elif hasattr(request, 'dict'):
+                data = request.dict() if callable(request.dict) else request.dict
+                img1 = Image(url=data.get('image1')) if isinstance(data.get('image1'), str) else data.get('image1')
+            else:
+                raise ValueError(f"Cannot find image1 in request. Available attrs: {dir(request)}")
+            
+            if hasattr(request, 'image2'):
+                img2 = request.image2
+            elif hasattr(request, 'dict'):
+                data = request.dict() if callable(request.dict) else request.dict
+                img2 = Image(url=data.get('image2')) if isinstance(data.get('image2'), str) else data.get('image2')
+            else:
+                raise ValueError(f"Cannot find image2 in request. Available attrs: {dir(request)}")
             
             job = copy.deepcopy(WORKFLOW_JSON)
             workflow = job["input"]["workflow"]
@@ -160,11 +171,11 @@ class LightMigration(fal.App):
             reference_image = f"input2_{uuid.uuid4().hex}.png"
             upload_images([{
                 "name": main_image,
-                "image": fal_image_to_base64(request.image1)
+                "image": fal_image_to_base64(img1)
             }])
             upload_images([{
                 "name": reference_image,
-                "image": fal_image_to_base64(request.image2)
+                "image": fal_image_to_base64(img2)
             }])
             workflow["31"]["inputs"]["image"] = main_image
             workflow["7"]["inputs"]["image"] = reference_image
