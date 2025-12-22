@@ -96,8 +96,11 @@ def upload_images(images):
 # Input Model (UI)
 # -------------------------------------------------
 class LightMigrationInput(BaseModel):
-    image1: Image = Field(description="Input Main Image")
-    image2: Image = Field(description="Input Reference Image")
+    image1: Image = Field(default=None, description="Input Main Image")
+    image2: Image = Field(default=None, description="Input Reference Image")
+    
+    class Config:
+        arbitrary_types_allowed = True
 
 
 # -------------------------------------------------
@@ -142,21 +145,23 @@ class LightMigration(fal.App):
     @fal.endpoint("/")
     def handler(self, request: LightMigrationInput) -> dict:
         try:
-            # Debug: Print request info
+            # Debug: Print model fields
             print(f"Request type: {type(request)}")
-            print(f"Request: {request}")
+            print(f"Model fields: {request.model_fields if hasattr(request, 'model_fields') else 'N/A'}")
+            print(f"Model dump: {request.model_dump() if hasattr(request, 'model_dump') else request.dict()}")
             
-            # Access images directly - fal should handle the Pydantic parsing
-            img1 = request.image1
-            img2 = request.image2
+            # Access images using model_dump or dict
+            data = request.model_dump() if hasattr(request, 'model_dump') else request.dict()
+            img1 = data.get('image1')
+            img2 = data.get('image2')
             
             print(f"Image1: {img1}, type: {type(img1)}")
             print(f"Image2: {img2}, type: {type(img2)}")
             
             if img1 is None:
-                raise ValueError("image1 is None - please provide a valid image URL or file")
+                raise ValueError(f"image1 is None. Request data: {data}")
             if img2 is None:
-                raise ValueError("image2 is None - please provide a valid image URL or file")
+                raise ValueError(f"image2 is None. Request data: {data}")
             
             job = copy.deepcopy(WORKFLOW_JSON)
             workflow = job["input"]["workflow"]
