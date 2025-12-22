@@ -89,9 +89,11 @@ def apply_fixed_values(workflow: dict, seed_value: int):
 # -------------------------------------------------
 class LightMigrationInput(BaseModel):
     main_image: Image = Field(
+        default=...,
         title="Main Image",
     )
     reference_image: Image = Field(
+        default=...,
         title="Reference Image",
     )
 
