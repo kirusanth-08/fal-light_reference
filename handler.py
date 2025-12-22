@@ -1,7 +1,6 @@
 import fal
 from fal.container import ContainerImage
 from fal.toolkit.image import Image
-from fal.toolkit import download_file
 from pathlib import Path
 import json
 import uuid
@@ -69,11 +68,12 @@ def fal_image_to_base64(img: Image) -> str:
 
 def image_url_to_base64(image_url: str) -> str:
     """Download image from URL and convert to base64."""
-    image_path = download_file(image_url)
-    with PILImage.open(image_path) as pil:
-        buf = BytesIO()
-        pil.save(buf, format="PNG")
-        return base64.b64encode(buf.getvalue()).decode()
+    response = requests.get(image_url)
+    response.raise_for_status()
+    pil = PILImage.open(BytesIO(response.content))
+    buf = BytesIO()
+    pil.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
 
 def upload_images(images):
     for img in images:
