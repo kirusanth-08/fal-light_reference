@@ -117,6 +117,9 @@ class LightMigration(fal.App):
 
     # 🔓 LOGS ENABLED
     private_logs = False
+    
+    # Track recent requests to detect duplicates
+    _recent_requests = {}
 
     def setup(self):
         print("[SETUP] Starting setup")
