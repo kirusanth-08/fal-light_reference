@@ -96,11 +96,8 @@ def upload_images(images):
 # Input Model (UI)
 # -------------------------------------------------
 class LightMigrationInput(BaseModel):
-    image1: Image = Field(default=None, description="Input Main Image")
-    image2: Image = Field(default=None, description="Input Reference Image")
-    
-    class Config:
-        arbitrary_types_allowed = True
+    image1: Image = Field(description="Input Main Image")
+    image2: Image = Field(description="Input Reference Image")
 
 
 # -------------------------------------------------
@@ -145,61 +142,91 @@ class LightMigration(fal.App):
     @fal.endpoint("/")
     def handler(self, request: dict) -> dict:
         try:
+            print("=" * 80)
+            print("HANDLER STARTED")
+            print("=" * 80)
+            
             # Debug: Print request info
-            print(f"Request type: {type(request)}")
-            print(f"Request keys: {list(request.keys())}")
+            print(f"1. Request type: {type(request)}")
+            print(f"2. Request keys: {list(request.keys())}")
+            print(f"3. Full request (first 500 chars): {str(request)[:500]}")
             
             # Get the workflow from the request
             workflow_input = request.get("input", {})
+            print(f"4. workflow_input keys: {list(workflow_input.keys()) if workflow_input else 'None'}")
+            
             workflow = workflow_input.get("workflow", {})
+            print(f"5. workflow found: {bool(workflow)}")
             
             if not workflow:
-                raise ValueError(f"No workflow found in request. Keys: {list(request.keys())}")
+                print(f"ERROR: No workflow found!")
+                raise ValueError(f"No workflow found in request. Keys: {list(request.keys())}, input: {workflow_input}")
             
-            print(f"Workflow nodes: {list(workflow.keys())[:10]}")  # Print first 10 nodes
+            print(f"6. Workflow has {len(workflow)} nodes")
+            print(f"7. First 10 workflow nodes: {list(workflow.keys())[:10]}")
             
             job = copy.deepcopy(request)
             
-            # The workflow is already in the request, just use it directly
-            # No need to upload images separately - they should be in the workflow
-
-
+            print("8. Creating ComfyUI client")
             # Run ComfyUI
             client_id = str(uuid.uuid4())
+            print(f"9. Client ID: {client_id}")
+            
             ws = websocket.WebSocket()
+            print(f"10. Connecting to websocket: ws://{COMFY_HOST}/ws?clientId={client_id}")
             ws.connect(f"ws://{COMFY_HOST}/ws?clientId={client_id}")
+            print("11. Websocket connected")
 
+            print("12. Sending prompt to ComfyUI")
             resp = requests.post(
                 f"http://{COMFY_HOST}/prompt",
                 json={"prompt": workflow, "client_id": client_id},
                 timeout=30
             )
+            print(f"13. Response status: {resp.status_code}")
             resp.raise_for_status()
             prompt_id = resp.json()["prompt_id"]
+            print(f"14. Prompt ID: {prompt_id}")
 
+            print("15. Waiting for execution to complete")
             while True:
                 msg = json.loads(ws.recv())
                 if msg.get("type") == "executing" and msg["data"]["node"] is None:
+                    print("16. Execution completed")
                     break
 
+            print("17. Fetching history")
             history = requests.get(
                 f"http://{COMFY_HOST}/history/{prompt_id}"
             ).json()
+            print(f"18. History keys: {list(history.keys())}")
 
+            print("19. Processing output images")
             images = []
-            for node in history[prompt_id]["outputs"].values():
+            for node_id, node in history[prompt_id]["outputs"].items():
+                print(f"20. Processing node {node_id}")
                 for img in node.get("images", []):
+                    print(f"21. Found image: {img['filename']}")
                     params = (
                         f"filename={img['filename']}"
                         f"&subfolder={img.get('subfolder','')}"
                         f"&type={img['type']}"
                     )
+                    print(f"22. Fetching image with params: {params}")
                     r = requests.get(f"http://{COMFY_HOST}/view?{params}")
+                    print(f"23. Image fetch status: {r.status_code}, size: {len(r.content)} bytes")
                     images.append(Image.from_bytes(r.content, format="png"))
 
             ws.close()
+            print(f"24. Returning {len(images)} images")
+            print("=" * 80)
+            print("HANDLER COMPLETED SUCCESSFULLY")
+            print("=" * 80)
             return {"status": "success", "images": images}
 
         except Exception as e:
+            print("=" * 80)
+            print(f"ERROR: {type(e).__name__}: {str(e)}")
+            print("=" * 80)
             traceback.print_exc()
             return {"error": str(e)}
