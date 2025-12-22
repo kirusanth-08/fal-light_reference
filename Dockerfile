@@ -79,6 +79,25 @@ RUN git clone https://github.com/kijai/ComfyUI-KJNodes.git /comfyui/custom_nodes
     && cd /comfyui/custom_nodes/ComfyUI-KJNodes && git checkout 62a862db37d77a9a2e7611f638f9ff151a24fdec \
     && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+# 6. yolain/ComfyUI-Easy-Use  ⭐ REQUIRED
+RUN git clone https://github.com/yolain/ComfyUI-Easy-Use.git /comfyui/custom_nodes/ComfyUI-Easy-Use \
+    && cd /comfyui/custom_nodes/ComfyUI-Easy-Use \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+# 7. ltdrdata/ComfyUI-Impact-Pack  (provides: GetImageSize+)
+RUN git clone https://github.com/ltdrdata/ComfyUI-Impact-Pack.git /comfyui/custom_nodes/ComfyUI-Impact-Pack \
+    && cd /comfyui/custom_nodes/ComfyUI-Impact-Pack \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+# 8. ltdrdata/ComfyUI-Impact-Subpack (provides GetImageSize+)
+RUN git clone https://github.com/ltdrdata/ComfyUI-Impact-Subpack.git /comfyui/custom_nodes/ComfyUI-Impact-Subpack \
+    && cd /comfyui/custom_nodes/ComfyUI-Impact-Subpack \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+# 9. cubiq/ComfyUI_essentials (provides: GetImageSize+)
+RUN git clone https://github.com/cubiq/ComfyUI_essentials.git /comfyui/custom_nodes/ComfyUI_essentials \
+    && cd /comfyui/custom_nodes/ComfyUI_essentials \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
 # ---------------------------------------------------------
 # fal Runtime Requirements
