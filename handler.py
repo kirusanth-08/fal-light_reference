@@ -118,7 +118,7 @@ class LightTransfer(fal.App):
     requirements = ["websockets", "websocket-client"]
 
     # 🔒 CRITICAL
-    private_logs = True
+    private_logs = False
 
     def setup(self):
         # Download models
