@@ -94,12 +94,14 @@ def apply_fixed_values(workflow: dict, seed_value: int):
 # -------------------------------------------------
 # Input Model (ONLY image inputs in UI)
 # -------------------------------------------------
-class LightMigrationInput(BaseModel):
+class LightTransferInput(BaseModel):
     main_image_url: str = Field(
+        ...,
         title="Main Image",
         description="URL of the main image to process.",
     )
     reference_image_url: str = Field(
+        ...,
         title="Reference Image",
         description="URL of the reference image for lighting.",
     )
@@ -107,7 +109,7 @@ class LightMigrationInput(BaseModel):
 # -------------------------------------------------
 # App
 # -------------------------------------------------
-class LightMigration(fal.App):
+class LightTransfer(fal.App):
     image = custom_image
     machine_type = "GPU-H100"
     max_concurrency = 5
@@ -144,7 +146,7 @@ class LightMigration(fal.App):
             raise RuntimeError("ComfyUI failed to start")
 
     @fal.endpoint("/")
-    def handler(self, input: LightMigrationInput):
+    def handler(self, input: LightTransferInput):
         try:
             job = copy.deepcopy(WORKFLOW_JSON)
             workflow = job["input"]["workflow"]

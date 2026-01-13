@@ -1,10 +1,10 @@
-# Kora WAN 2.2 Deployment
+# Light Reference Deployment
 
-A Docker-based deployment for the WAN 2.2 text-to-video model using ComfyUI, optimized for fal and featuring advanced upscaling capabilities.
+A Docker-based deployment for Qwen Image Edit light reference/migration model using ComfyUI, optimized for fal.
 
 ## Overview
 
-This repository contains a complete deployment setup for the WAN 2.2 model, which is a powerful text-to-image generation system. The deployment includes:
+This repository contains a complete deployment setup for the Qwen Image Edit light reference model, which applies lighting and color tone from a reference image to a main image. The deployment includes:
 
 
 
@@ -13,11 +13,7 @@ This repository contains a complete deployment setup for the WAN 2.2 model, whic
 
 ### Local Deployment
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/noobprograms/kora-wan-t2i.git
-   cd kora-wan-t2i
-   ```
+1. **Clone the repository or navigate to your workspace directory**
 
 
 ### Model Download
@@ -41,22 +37,18 @@ It contains:
 The `workflow.py` contains a complete ComfyUI workflow with the format that is acceptable by the api
 ## Custom Nodes
 
-The deployment includes several custom ComfyUI nodes:
+The deployment includes the following custom ComfyUI node:
 
-- **comfyui-kjnodes**: Advanced node collection
-- **comfyui_controlnet_aux**: ControlNet auxiliary models
-- **cg-use-everywhere**: Global node utilities
-- **comfyui-easy-use**: Simplified workflow nodes
-- **RES4LYF**: Custom upscaling and enhancement nodes
+- **ComfyUI-KJNodes**: Provides ImageScaleToTotalPixels node for image scaling
 
-All these custom nodes are added using the docker file. You can see the 46-52 lines in the Dockerfile on how to add custom nodes. Some custom nodes don't have a requirements file so you need to skip the requirements installation part for them
+Custom nodes are added using the Dockerfile. You can see the custom nodes section in the Dockerfile on how to add nodes. Some custom nodes don't have a requirements file so you need to skip the requirements installation part for them.
 
 ## Usage
 
 1. **Setup**: Change the model paths and urls and the custom nodes according to your workflow
-2. **Python Version**: The python version in teh dockerfile should match the local computer. My PC uses python 3.12. So the dockerfile was modified to use python 3.12
-3. **Testing**: Add the fal api key in your env and select the appropriate team. Then use the command ```fal run handler.py::KoraProApp``` to run the container. It will give you 3 links. Use the playground link to test your workflow.py there.
-4. **Deploy**: Use ```fal deploy handler.py::KoraProApp``` to deploy the serverless endpoint completely.
+2. **Python Version**: The python version in the dockerfile should match the local computer. Python 3.12 is used in this deployment.
+3. **Testing**: Add the fal api key in your env and select the appropriate team. Then use the command ```fal run handler.py::LightTransfer``` to run the container. It will give you 3 links. Use the playground link to test your workflow.py there.
+4. **Deploy**: Use ```fal deploy handler.py::LightTransfer``` to deploy the serverless endpoint completely.
 
 5. **Querying Using Endpoint**: We will mostly be using the asynchronous endpoint. Once you have that endpoint you need to send request to it in this format
 ```POST https://queue.fal.run/VISIONREIMAGINE/d11f80a6-1d26-452b-bdf2-14eacd823871/```
