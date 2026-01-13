@@ -4,9 +4,25 @@ A Docker-based deployment for Qwen Image Edit light reference/migration model us
 
 ## Overview
 
-This repository contains a complete deployment setup for the Qwen Image Edit light reference model, which applies lighting and color tone from a reference image to a main image. The deployment includes:
+This repository contains a complete deployment setup for the Qwen Image Edit light reference model, which applies lighting and color tone from a reference image to a main image.
 
+### Required Inputs
 
+**Both inputs are mandatory:**
+- **Main Image**: The image you want to relight/recolor
+- **Reference Image**: The image whose lighting and color tone will be applied to the main image
+
+### Example Use Cases
+
+**Example 1: Indoor Lighting Transfer**
+- Main Image: Portrait with neutral lighting
+- Reference Image: Scene with warm golden hour lighting
+- Result: Portrait with warm golden hour lighting applied
+
+**Example 2: Color Tone Migration**
+- Main Image: Product photo with cool white lighting
+- Reference Image: Scene with warm sunset tones
+- Result: Product photo with warm sunset color tones
 
 ## Quick Start
 
@@ -47,7 +63,14 @@ Custom nodes are added using the Dockerfile. You can see the custom nodes sectio
 
 1. **Setup**: Change the model paths and urls and the custom nodes according to your workflow
 2. **Python Version**: The python version in the dockerfile should match the local computer. Python 3.12 is used in this deployment.
-3. **Testing**: Add the fal api key in your env and select the appropriate team. Then use the command ```fal run handler.py::LightTransfer``` to run the container. It will give you 3 links. Use the playground link to test your workflow.py there.
+3. **Testing**: Add the fal api key in your env and select the appropriate team. Then use the command ```fal run handler.py::LightTransfer``` to run the container. It will give you 3 links. Use the playground link to test your workflow.
+
+   **In the playground, you'll see two required fields:**
+   - Main Image URL: The image you want to relight/recolor
+   - Reference Image URL: The image whose lighting will be applied
+   
+   Both fields are mandatory. The playground will show example URLs by default.
+
 4. **Deploy**: Use ```fal deploy handler.py::LightTransfer``` to deploy the serverless endpoint completely.
 
 5. **Querying Using Endpoint**: We will mostly be using the asynchronous endpoint. Once you have that endpoint you need to send request to it in this format
@@ -56,7 +79,25 @@ Inside the headers you need to add the following
 ```"Content-Type: application/json"``` 
 ```"Authorization: Key $FAL_API_KEY"```
 
-In body you just need to pass in the workflow.py
+In body you need to pass the required image URLs:
+
+**Required Request Body:**
+```json
+{
+  "main_image_url": "https://example.com/your-main-image.jpg",
+  "reference_image_url": "https://example.com/your-reference-image.jpg"
+}
+```
+
+**Sample Request with Example Images:**
+```json
+{
+  "main_image_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800",
+  "reference_image_url": "https://images.unsplash.com/photo-1495954484750-af469f2f9be5?w=800"
+}
+```
+
+Note: Both `main_image_url` and `reference_image_url` are mandatory fields.
 
 Now you will get the response in this format
 ```json

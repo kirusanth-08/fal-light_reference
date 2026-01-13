@@ -97,13 +97,15 @@ def apply_fixed_values(workflow: dict, seed_value: int):
 class LightTransferInput(BaseModel):
     main_image_url: str = Field(
         ...,
-        title="Main Image",
-        description="URL of the main image to process.",
+        title="Main Image URL",
+        description="URL of the main image to relight/recolor. This is the image that will be modified. (REQUIRED)",
+        examples=["https://img.freepik.com/free-photo/young-woman-new-york-city-daytime_23-2149488480.jpg?semt=ais_hybrid&w=740&q=80"]
     )
     reference_image_url: str = Field(
         ...,
-        title="Reference Image",
-        description="URL of the reference image for lighting.",
+        title="Reference Image URL",
+        description="URL of the reference image whose lighting and color tone will be applied to the main image. (REQUIRED)",
+        examples=["https://images.pexels.com/photos/29422068/pexels-photo-29422068.jpeg?cs=srgb&dl=pexels-omergulen-29422068.jpg&fm=jpg"]
     )
 
 # -------------------------------------------------
