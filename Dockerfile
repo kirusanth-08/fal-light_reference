@@ -54,9 +54,19 @@ RUN pip install websocket-client websockets
 # ComfyUI Custom Nodes
 # ---------------------------------------------------------
 
-# 1. kijai/ComfyUI-KJNodes (provides image scaling nodes)
+# 1. kijai/ComfyUI-KJNodes (provides ImageScaleToTotalPixels and other image processing nodes)
 RUN git clone https://github.com/kijai/ComfyUI-KJNodes.git /comfyui/custom_nodes/ComfyUI-KJNodes \
-    && cd /comfyui/custom_nodes/ComfyUI-KJNodes && git checkout 62a862db37d77a9a2e7611f638f9ff151a24fdec \
+    && cd /comfyui/custom_nodes/ComfyUI-KJNodes && git checkout 4dfb85dcc52e4315c33170d97bb987baa46d128b \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+# 2. Comfy-Org/Qwen-Image_ComfyUI (provides Qwen-specific nodes: TextEncodeQwenImageEditPlus, CFGNorm, ModelSamplingAuraFlow)
+RUN git clone https://github.com/Comfy-Org/Qwen-Image_ComfyUI.git /comfyui/custom_nodes/Qwen-Image_ComfyUI \
+    && cd /comfyui/custom_nodes/Qwen-Image_ComfyUI \
+    && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+# 3. cubiq/ComfyUI_essentials (provides utility nodes for better workflow compatibility)
+RUN git clone https://github.com/cubiq/ComfyUI_essentials.git /comfyui/custom_nodes/ComfyUI_essentials \
+    && cd /comfyui/custom_nodes/ComfyUI_essentials \
     && if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
 # ---------------------------------------------------------
