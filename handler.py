@@ -47,10 +47,12 @@ def check_server(url, retries=500, delay=0.1):
     import time
     for _ in range(retries):
         try:
-            if requests.get(url).status_code == 200:
+            if requests.get(url, timeout=5).status_code == 200:
                 return True
-        except:
-            pass
+        except (requests.RequestException, Exception) as e:
+            # Log but continue retrying
+            if _ == retries - 1:
+                print(f"Server check failed after {retries} attempts: {e}")
         time.sleep(delay)
     return False
 
@@ -60,14 +62,97 @@ def fal_image_to_base64(img: Image) -> str:
     pil.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
 
-def image_url_to_base64(image_url: str) -> str:
-    """Download image from URL and convert to base64."""
-    response = requests.get(image_url, timeout=30)  # Add timeout
-    response.raise_for_status()
-    pil = PILImage.open(BytesIO(response.content))
-    buf = BytesIO()
-    pil.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode()
+def validate_image_url(url: str):
+    """Validate image URL to prevent SSRF attacks."""
+    from urllib.parse import urlparse
+    import ipaddress
+    
+    parsed = urlparse(url)
+    
+    # Only allow http/https
+    if parsed.scheme not in ['http', 'https']:
+        raise ValueError(f"Invalid URL scheme: {parsed.scheme}. Only http/https allowed.")
+    
+    # Check hostname
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Invalid URL: missing hostname")
+    
+    # Prevent localhost/private IP access
+    hostname_lower = hostname.lower()
+    if hostname_lower in ['localhost', 'localhost.localdomain']:
+        raise ValueError("Access to localhost not allowed")
+    
+    # Check for private IP addresses
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_reserved:
+            raise ValueError(f"Access to private IP addresses not allowed: {hostname}")
+    except ValueError:
+        # Not an IP address, check for common private patterns
+        if any(hostname_lower.startswith(prefix) for prefix in ['192.168.', '10.', '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.']):
+            raise ValueError(f"Access to private networks not allowed: {hostname}")
+
+def image_url_to_base64(image_url: str, max_size_mb: int = 50) -> str:
+    """Download image from URL and convert to base64 with validation."""
+    validate_image_url(image_url)
+    
+    # Add retry logic for transient failures
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(image_url, timeout=30, stream=True)
+            response.raise_for_status()
+            
+            # Check content length before downloading
+            content_length = response.headers.get('content-length')
+            if content_length and int(content_length) > max_size_mb * 1024 * 1024:
+                raise ValueError(f"Image too large. Max size: {max_size_mb}MB")
+            
+            # Download with size limit
+            content = BytesIO()
+            total_size = 0
+            max_bytes = max_size_mb * 1024 * 1024
+            
+            for chunk in response.iter_content(8192):
+                total_size += len(chunk)
+                if total_size > max_bytes:
+                    raise ValueError(f"Image exceeds {max_size_mb}MB limit")
+                content.write(chunk)
+            
+            content.seek(0)
+            
+            # Validate it's actually an image and convert to PNG
+            try:
+                pil = PILImage.open(content)
+                # Verify it's a valid image by loading it
+                pil.verify()
+                # Reopen for actual conversion (verify closes the file)
+                content.seek(0)
+                pil = PILImage.open(content)
+                
+                # Convert to RGB if necessary (handles RGBA, L, etc.)
+                if pil.mode not in ['RGB', 'L']:
+                    if pil.mode == 'RGBA':
+                        # Create white background for transparency
+                        background = PILImage.new('RGB', pil.size, (255, 255, 255))
+                        background.paste(pil, mask=pil.split()[3] if len(pil.split()) == 4 else None)
+                        pil = background
+                    else:
+                        pil = pil.convert('RGB')
+                
+                buf = BytesIO()
+                pil.save(buf, format="PNG")
+                return base64.b64encode(buf.getvalue()).decode()
+            except Exception as img_err:
+                raise ValueError(f"Invalid image format: {str(img_err)}")
+            
+        except requests.RequestException as e:
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                continue
+            raise ValueError(f"Failed to download image after {max_retries} attempts: {str(e)}")
 
 def upload_images(images):
     for img in images:
@@ -141,19 +226,38 @@ class LightTransfer(fal.App):
             raise RuntimeError("ComfyUI failed to start")
 
     @fal.endpoint("/")
-    def handler(self, input: LightTransferInput, request: fal.Request = None):
+    def handler(self, input: LightTransferInput, request=None):
         try:
+            # Validate workflow structure
             job = copy.deepcopy(WORKFLOW_JSON)
+            if "input" not in job or "workflow" not in job["input"]:
+                raise ValueError("Invalid workflow structure")
+            
             workflow = job["input"]["workflow"]
 
             main_img = f"main_{uuid.uuid4().hex}.png"
             ref_img = f"ref_{uuid.uuid4().hex}.png"
 
+            # Download and validate images
+            try:
+                main_b64 = image_url_to_base64(input.main_image_url)
+                ref_b64 = image_url_to_base64(input.reference_image_url)
+            except ValueError as img_err:
+                return {"error": f"Image validation failed: {str(img_err)}"}
+            except Exception as img_err:
+                return {"error": f"Failed to download images: {str(img_err)}"}
+
             upload_images([
-                {"name": main_img, "image": image_url_to_base64(input.main_image_url)},
-                {"name": ref_img, "image": image_url_to_base64(input.reference_image_url)}
+                {"name": main_img, "image": main_b64},
+                {"name": ref_img, "image": ref_b64}
             ])
 
+            # Validate and update workflow nodes
+            if "31" not in workflow or "inputs" not in workflow["31"]:
+                raise ValueError("Invalid workflow: missing node 31")
+            if "7" not in workflow or "inputs" not in workflow["7"]:
+                raise ValueError("Invalid workflow: missing node 7")
+            
             workflow["31"]["inputs"]["image"] = main_img
             workflow["7"]["inputs"]["image"] = ref_img
 
@@ -220,17 +324,26 @@ class LightTransfer(fal.App):
 
                 return {"status": "success", "images": images}
             finally:
-                # Cleanup
+                # Cleanup websocket
                 try:
                     ws.close()
-                except:
-                    pass
+                except Exception as ws_err:
+                    print(f"Warning: Failed to close websocket: {ws_err}")
+                
+                # Cleanup temp files
                 for temp_file in temp_files:
                     try:
-                        os.remove(temp_file)
-                    except:
-                        pass
+                        if os.path.exists(temp_file):
+                            os.remove(temp_file)
+                    except Exception as file_err:
+                        print(f"Warning: Failed to remove temp file {temp_file}: {file_err}")
 
-        except Exception as e:
-            traceback.print_exc()
+        except TimeoutError as e:
+            return {"error": f"Request timed out: {str(e)}"}
+        except ValueError as e:
+            # User input validation errors - don't log full traceback
             return {"error": str(e)}
+        except Exception as e:
+            # Unexpected errors - log full traceback
+            traceback.print_exc()
+            return {"error": f"Internal server error: {str(e)}"}
