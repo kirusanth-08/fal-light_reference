@@ -188,6 +188,7 @@ WORKFLOW_JSON={
         "inputs": {
           "upscale_method": "lanczos",
           "megapixels": 1,
+          "resolution_steps": 1,
           "image": [
             "31",
             0
@@ -202,6 +203,7 @@ WORKFLOW_JSON={
         "inputs": {
           "upscale_method": "lanczos",
           "megapixels": 1,
+          "resolution_steps": 1,
           "image": [
             "7",
             0
