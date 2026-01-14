@@ -28,12 +28,6 @@ custom_image = ContainerImage.from_dockerfile(dockerfile_path)
 COMFY_HOST = "127.0.0.1:8188"
 
 # -------------------------------------------------
-# Fixed INTERNAL parameters (NOT exposed in UI)
-# -------------------------------------------------
-FIXED_CFG = 1.0
-FIXED_DENOISE = 1.0
-
-# -------------------------------------------------
 # Utilities
 # -------------------------------------------------
 def ensure_dir(path):
@@ -68,7 +62,7 @@ def fal_image_to_base64(img: Image) -> str:
 
 def image_url_to_base64(image_url: str) -> str:
     """Download image from URL and convert to base64."""
-    response = requests.get(image_url)
+    response = requests.get(image_url, timeout=30)  # Add timeout
     response.raise_for_status()
     pil = PILImage.open(BytesIO(response.content))
     buf = BytesIO()
@@ -87,8 +81,6 @@ def apply_fixed_values(workflow: dict, seed_value: int):
         inputs = node.get("inputs", {})
 
         if node.get("class_type") == "KSampler":
-            inputs["cfg"] = FIXED_CFG
-            inputs["denoise"] = FIXED_DENOISE
             inputs["seed"] = seed_value
 
 # -------------------------------------------------
@@ -115,10 +107,11 @@ class LightTransfer(fal.App):
     image = custom_image
     machine_type = "GPU-H100"
     max_concurrency = 5
+    request_timeout = 300  # 5 minutes max per request
     requirements = ["websockets", "websocket-client"]
 
     # 🔒 CRITICAL
-    private_logs = False
+    private_logs = True
 
     def setup(self):
         # Download models
@@ -148,7 +141,7 @@ class LightTransfer(fal.App):
             raise RuntimeError("ComfyUI failed to start")
 
     @fal.endpoint("/")
-    def handler(self, input: LightTransferInput):
+    def handler(self, input: LightTransferInput, request: fal.Request = None):
         try:
             job = copy.deepcopy(WORKFLOW_JSON)
             workflow = job["input"]["workflow"]
@@ -170,42 +163,73 @@ class LightTransfer(fal.App):
             # Run ComfyUI
             client_id = str(uuid.uuid4())
             ws = websocket.WebSocket()
-            ws.connect(f"ws://{COMFY_HOST}/ws?clientId={client_id}")
+            ws.settimeout(240)  # 4 minute websocket timeout
+            temp_files = []  # Track temp files for cleanup
+            
+            try:
+                ws.connect(f"ws://{COMFY_HOST}/ws?clientId={client_id}")
 
-            resp = requests.post(
-                f"http://{COMFY_HOST}/prompt",
-                json={"prompt": workflow, "client_id": client_id},
-                timeout=30
-            )
-            resp.raise_for_status()
-            prompt_id = resp.json()["prompt_id"]
+                resp = requests.post(
+                    f"http://{COMFY_HOST}/prompt",
+                    json={"prompt": workflow, "client_id": client_id},
+                    timeout=30
+                )
+                
+                # Log detailed error if request fails
+                if resp.status_code != 200:
+                    error_detail = resp.text
+                    print(f"ComfyUI Error Response: {error_detail}")
+                    return {"error": f"ComfyUI rejected workflow: {error_detail}"}
+                
+                prompt_id = resp.json()["prompt_id"]
 
-            while True:
-                msg = json.loads(ws.recv())
-                if msg.get("type") == "executing" and msg["data"]["node"] is None:
-                    break
+                # Wait for completion with timeout
+                import time
+                start_time = time.time()
+                while time.time() - start_time < 240:  # 4 minute max
+                    msg = json.loads(ws.recv())
+                    if msg.get("type") == "executing" and msg["data"]["node"] is None:
+                        break
+                else:
+                    raise TimeoutError("Workflow execution timed out")
 
-            history = requests.get(
-                f"http://{COMFY_HOST}/history/{prompt_id}"
-            ).json()
+                history = requests.get(
+                    f"http://{COMFY_HOST}/history/{prompt_id}"
+                ).json()
 
-            images = []
-            for node in history[prompt_id]["outputs"].values():
-                for img in node.get("images", []):
-                    params = (
-                        f"filename={img['filename']}"
-                        f"&subfolder={img.get('subfolder','')}"
-                        f"&type={img['type']}"
-                    )
-                    r = requests.get(f"http://{COMFY_HOST}/view?{params}")
-                    # Save to temp file and use Image.from_path for better compatibility
-                    temp_path = f"/tmp/output_{uuid.uuid4().hex}.png"
-                    with open(temp_path, "wb") as f:
-                        f.write(r.content)
-                    images.append(Image.from_path(temp_path))
+                images = []
+                for node in history[prompt_id]["outputs"].values():
+                    for img in node.get("images", []):
+                        params = (
+                            f"filename={img['filename']}"
+                            f"&subfolder={img.get('subfolder','')}"
+                            f"&type={img['type']}"
+                        )
+                        r = requests.get(f"http://{COMFY_HOST}/view?{params}")
+                        # Save to temp file and use Image.from_path for better compatibility
+                        temp_path = f"/tmp/output_{uuid.uuid4().hex}.png"
+                        temp_files.append(temp_path)
+                        with open(temp_path, "wb") as f:
+                            f.write(r.content)
+                        try:
+                            images.append(Image.from_path(temp_path, request=request))
+                        except Exception as upload_err:
+                            print(f"Image upload warning: {upload_err}")
+                            # Fallback: use CDN repository which doesn't require auth
+                            images.append(Image.from_path(temp_path, repository="cdn"))
 
-            ws.close()
-            return {"status": "success", "images": images}
+                return {"status": "success", "images": images}
+            finally:
+                # Cleanup
+                try:
+                    ws.close()
+                except:
+                    pass
+                for temp_file in temp_files:
+                    try:
+                        os.remove(temp_file)
+                    except:
+                        pass
 
         except Exception as e:
             traceback.print_exc()
