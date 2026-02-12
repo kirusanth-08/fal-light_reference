@@ -1,7 +1,8 @@
 import fal
 from fal.container import ContainerImage
-from fal.toolkit.image import Image
+from fal.toolkit import Image
 from pathlib import Path
+from fastapi import Response, HTTPException
 import json
 import uuid
 import base64
@@ -186,16 +187,36 @@ class LightTransferInput(BaseModel):
     )
 
 # -------------------------------------------------
+# Output Model
+# -------------------------------------------------
+class LightTransferOutput(BaseModel):
+    image: Image = Field(
+        ...,
+        description="The generated image with applied lighting and color transfer."
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "image": {
+                    "url": "https://fal.media/files/example.png",
+                    "content_type": "image/png",
+                    "file_name": "example.png",
+                    "file_size": 1024000
+                }
+            }
+        }
+
+# -------------------------------------------------
 # App
 # -------------------------------------------------
-class LightTransfer(fal.App):
+class LightTransfer(fal.App, keep_alive=100, min_concurrency=0, max_concurrency=5, name="light-transfer"):
+    """Light Transfer - Relight and recolor images using reference lighting."""
+    
     image = custom_image
     machine_type = "GPU-H100"
-    max_concurrency = 5
-    request_timeout = 300  # 5 minutes max per request
+    request_timeout = 300
     requirements = ["websockets", "websocket-client"]
-
-    # 🔒 CRITICAL
     private_logs = True
 
     def setup(self):
@@ -226,7 +247,7 @@ class LightTransfer(fal.App):
             raise RuntimeError("ComfyUI failed to start")
 
     @fal.endpoint("/")
-    def handler(self, input: LightTransferInput, request=None):
+    async def handler(self, input: LightTransferInput, response: Response) -> LightTransferOutput:
         try:
             # Validate workflow structure
             job = copy.deepcopy(WORKFLOW_JSON)
@@ -243,9 +264,9 @@ class LightTransfer(fal.App):
                 main_b64 = image_url_to_base64(input.main_image_url)
                 ref_b64 = image_url_to_base64(input.reference_image_url)
             except ValueError as img_err:
-                return {"error": f"Image validation failed: {str(img_err)}"}
+                raise HTTPException(status_code=400, detail=f"Image validation failed: {str(img_err)}")
             except Exception as img_err:
-                return {"error": f"Failed to download images: {str(img_err)}"}
+                raise HTTPException(status_code=500, detail=f"Failed to download images: {str(img_err)}")
 
             upload_images([
                 {"name": main_img, "image": main_b64},
@@ -268,7 +289,6 @@ class LightTransfer(fal.App):
             client_id = str(uuid.uuid4())
             ws = websocket.WebSocket()
             ws.settimeout(240)  # 4 minute websocket timeout
-            temp_files = []  # Track temp files for cleanup
             
             try:
                 ws.connect(f"ws://{COMFY_HOST}/ws?clientId={client_id}")
@@ -283,7 +303,7 @@ class LightTransfer(fal.App):
                 if resp.status_code != 200:
                     error_detail = resp.text
                     print(f"ComfyUI Error Response: {error_detail}")
-                    return {"error": f"ComfyUI rejected workflow: {error_detail}"}
+                    raise HTTPException(status_code=500, detail=f"ComfyUI rejected workflow: {error_detail}")
                 
                 prompt_id = resp.json()["prompt_id"]
 
@@ -291,7 +311,10 @@ class LightTransfer(fal.App):
                 import time
                 start_time = time.time()
                 while time.time() - start_time < 240:  # 4 minute max
-                    msg = json.loads(ws.recv())
+                    out = ws.recv()
+                    if not out.strip().startswith('{'):
+                        continue
+                    msg = json.loads(out)
                     if msg.get("type") == "executing" and msg["data"]["node"] is None:
                         break
                 else:
@@ -301,7 +324,8 @@ class LightTransfer(fal.App):
                     f"http://{COMFY_HOST}/history/{prompt_id}"
                 ).json()
 
-                images = []
+                # Get first image
+                output_image = None
                 for node in history[prompt_id]["outputs"].values():
                     for img in node.get("images", []):
                         params = (
@@ -310,40 +334,32 @@ class LightTransfer(fal.App):
                             f"&type={img['type']}"
                         )
                         r = requests.get(f"http://{COMFY_HOST}/view?{params}")
-                        # Save to temp file and use Image.from_path for better compatibility
-                        temp_path = f"/tmp/output_{uuid.uuid4().hex}.png"
-                        temp_files.append(temp_path)
-                        with open(temp_path, "wb") as f:
-                            f.write(r.content)
-                        try:
-                            images.append(Image.from_path(temp_path, request=request))
-                        except Exception as upload_err:
-                            print(f"Image upload warning: {upload_err}")
-                            # Fallback: use CDN repository which doesn't require auth
-                            images.append(Image.from_path(temp_path, repository="cdn"))
+                        pil_image = PILImage.open(BytesIO(r.content))
+                        output_image = Image.from_pil(pil_image, format="png")
+                        break
+                    if output_image:
+                        break
 
-                return {"status": "success", "images": images}
+                if not output_image:
+                    raise HTTPException(status_code=500, detail="No output image generated")
+                
+                # Add billing headers
+                response.headers["x-fal-billable-units"] = "1"
+                
+                return LightTransferOutput(image=output_image)
             finally:
                 # Cleanup websocket
                 try:
                     ws.close()
                 except Exception as ws_err:
                     print(f"Warning: Failed to close websocket: {ws_err}")
-                
-                # Cleanup temp files
-                for temp_file in temp_files:
-                    try:
-                        if os.path.exists(temp_file):
-                            os.remove(temp_file)
-                    except Exception as file_err:
-                        print(f"Warning: Failed to remove temp file {temp_file}: {file_err}")
 
+        except HTTPException:
+            raise
         except TimeoutError as e:
-            return {"error": f"Request timed out: {str(e)}"}
+            raise HTTPException(status_code=504, detail=f"Request timed out: {str(e)}")
         except ValueError as e:
-            # User input validation errors - don't log full traceback
-            return {"error": str(e)}
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            # Unexpected errors - log full traceback
             traceback.print_exc()
-            return {"error": f"Internal server error: {str(e)}"}
+            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
